@@ -50,3 +50,9 @@ Tests cover physical-card identity, face-card values, no reuse, independent bitm
 Browser smoke checks in `scripts/browser-check.js` exercise chart modes, target add/remove, sorting, comparison, play-size columns, 12-card exact analysis, Monte Carlo sample counts, impossible play sizes, and empty selection. The file is an async browser function for the `chrome-devtools-axi eval` API; run it with the app open at its default settings. Desktop and 390px mobile layouts were inspected, and the production chart and background worker were verified in Chrome.
 
 Suit-aware rules can use the retained Card model later; numeric grouping must be replaced or extended when suit or rank affects success. Custom decks, poker rules, and draw/discard mechanics are intentionally outside this version.
+
+## Publishing
+
+Live app: https://patrickjeter40.github.io/playing-card-probability-explorer/
+
+Pushes to `main` run automated tests, TypeScript checks, and a production build before deploying to GitHub Pages. Pull requests run the same checks without deployment. The repository's Pages source is GitHub Actions. Relative asset URLs allow the app and calculation worker to run under the repository URL path.
