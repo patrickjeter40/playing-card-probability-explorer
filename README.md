@@ -4,7 +4,7 @@ A card-probability research tool with a playable generic tactical encounter.
 
 ## Play the prototype
 
-Open [Tactical playtest](https://patrickjeter40.github.io/playing-card-probability-explorer/#playtest), or choose **Tactical playtest** in the app. Three characters have private six-card hands from one shared deck. Their abilities use totals 15, 21, and 24; larger payments produce stronger effects. See [PLAYTEST.md](PLAYTEST.md) for the complete rules, controls, assumptions, and session export format.
+Open [Tactical playtest](https://patrickjeter40.github.io/playing-card-probability-explorer/#playtest), or choose **Tactical playtest** in the app. Three offensive characters specialize in single-target damage, area damage, and mobile damage, with private six-card hands from one shared deck. Encounters default to five enemies; Dev tools can restart with 1-10. Each has three unique abilities at totals 15, 21, and 24 and one free exchange of any 1-6 cards before acting each turn; larger payments produce stronger effects. See [PLAYTEST.md](PLAYTEST.md) for the complete rules, controls, assumptions, and session export format.
 
 The probability explorer remains available at [#analysis](https://patrickjeter40.github.io/playing-card-probability-explorer/#analysis). Switching tabs preserves the current encounter; refreshing the page starts over.
 
