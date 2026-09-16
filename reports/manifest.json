@@ -1,0 +1,38 @@
+{
+  "generated_at": "2026-09-16T04:27:00.669Z",
+  "base_seed": 20260915,
+  "critical_samples_per_hand": 100000,
+  "party_samples_per_configuration": 10000,
+  "spending_samples_per_hand": 5000,
+  "exact_reports": 36,
+  "exact_union_reports": 9,
+  "party_configurations": 25,
+  "assumptions": [
+    "One physical 52-card deck; no replacement, no initial discards or redraws.",
+    "Ace low; J/Q/K numeric value 10; suits ignored.",
+    "Abilities accept any 2-5 cards; played cards spent.",
+    "Critical requires ALL played cards to be a run or ALL to match.",
+    "No wraparound straights. Rank runs A through K; numeric runs 1 through 10.",
+    "Opening-deal availability, not multi-round combat effectiveness.",
+    "Party deals are correlated draws from one shuffled deck. Five hands of 11 or 12 cannot be dealt and are omitted.",
+    "Party menu packing assumes every character can use every menu target once as its activation; no class-specific restrictions."
+  ],
+  "numeric_validation": "For every H and k, sum of expected subset counts equals choose(H,k) within 1e-8.",
+  "files": {
+    "exact": "exact/hand-HH-play-K.csv",
+    "union": "exact/all-hands-any-2-to-5.csv",
+    "critical": "critical/all-hands-both-definitions.csv",
+    "patterns": "critical/pattern-catalogue.csv",
+    "party": "party/shared-vs-private.csv",
+    "spending": "spending/repeated-target.csv",
+    "menus": "spending/party-menu-capacity.csv",
+    "card_count": "card-count/all-hands-tiers.csv",
+    "card_count_capacity": "card-count/party-capacity-by-tier.csv"
+  },
+  "card_count_tiers": "Exact joint highest/lowest available cardinality for every total; not derived by subtracting overlapping marginal probabilities.",
+  "card_count_capacity_samples_per_hand": 5000,
+  "critical_methods": {
+    "rank": "100000 seeded physical hands per H",
+    "value": "Exact weighted numeric-hand enumeration, independently cross-checked against simulation"
+  }
+}
