@@ -56,3 +56,7 @@ Suit-aware rules can use the retained Card model later; numeric grouping must be
 Live app: https://patrickjeter40.github.io/playing-card-probability-explorer/
 
 Pushes to `main` run automated tests, TypeScript checks, and a production build before deploying to GitHub Pages. Pull requests run the same checks without deployment. The repository's Pages source is GitHub Actions. Relative asset URLs allow the app and calculation worker to run under the repository URL path.
+
+## Exporting data
+
+Use **Export CSV** beside Detailed results after calculation finishes. The download contains all totals in the table's current sort order, with metrics for the selected play sizes and their union. It includes hand size, exact/simulation mode, simulation sample count and seed when applicable, chart metric, and a highlighted-target flag. Both probabilities and average ways are included regardless of the active chart metric, along with Decision Density and the probability of at least two or three ways. Probability columns use full-precision fractions from 0 to 1; undefined Decision Density is blank. CSV export uses the displayed calculation without rerunning or resampling it.
