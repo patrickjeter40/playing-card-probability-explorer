@@ -1,6 +1,12 @@
 # Playing Card Probability Explorer
 
-A compact research tool for choosing numeric targets and measuring the number of card choices available to a player.
+A card-probability research tool with a playable generic tactical encounter.
+
+## Play the prototype
+
+Open [Tactical playtest](https://patrickjeter40.github.io/playing-card-probability-explorer/#playtest), or choose **Tactical playtest** in the app. Three characters have private six-card hands from one shared deck. Their abilities use totals 15, 21, and 24; larger payments produce stronger effects. See [PLAYTEST.md](PLAYTEST.md) for the complete rules, controls, assumptions, and session export format.
+
+The probability explorer remains available at [#analysis](https://patrickjeter40.github.io/playing-card-probability-explorer/#analysis). Switching tabs preserves the current encounter; refreshing the page starts over.
 
 ## Run
 
@@ -60,3 +66,9 @@ Pushes to `main` run automated tests, TypeScript checks, and a production build 
 ## Exporting data
 
 Use **Export CSV** beside Detailed results after calculation finishes. The download contains all totals in the table's current sort order, with metrics for the selected play sizes and their union. It includes hand size, exact/simulation mode, simulation sample count and seed when applicable, chart metric, and a highlighted-target flag. Both probabilities and average ways are included regardless of the active chart metric, along with Decision Density and the probability of at least two or three ways. Probability columns use full-precision fractions from 0 to 1; undefined Decision Density is blank. CSV export uses the displayed calculation without rerunning or resampling it.
+
+## Saved research reports
+
+The [report index](reports/README.md) links 36 exact hand-size/play-size reports, nine any-2–5 union reports, both critical definitions, shared/private party comparisons, spent-card capacity, and exact card-count effect tiers. Start with the [tactical RPG evaluation](reports/evaluation.md) and [power from cards spent](reports/card-count-evaluation.md), or open the standalone [interactive reference](reports/review.html).
+
+Regenerate the numerical reports with `node scripts/generate-reports.mjs`, then regenerate the summaries with `node scripts/summarize-reports.mjs`. The studies are reproducible from the saved seeds and assumptions in `reports/manifest.json`.

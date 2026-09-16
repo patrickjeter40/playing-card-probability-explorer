@@ -16,7 +16,8 @@ const select = async (selector, value) => {
   await page.eval(`() => { const el = document.querySelector(${JSON.stringify(selector)}); el.value = ${JSON.stringify(value)}; el.dispatchEvent(new Event('change', {bubbles:true})); }`);
   await new Promise(r => setTimeout(r,100));
 };
-await page.open('http://127.0.0.1:5173');
+location.hash = 'analysis';
+await new Promise(r => setTimeout(r, 100));
 await page.wait('footer');
 check(await page.eval(() => document.querySelectorAll('.target').length === 3), 'default target cards rendered');
 check(await page.eval(() => document.querySelectorAll('.details tbody tr').length === 49), 'all 49 totals rendered');
