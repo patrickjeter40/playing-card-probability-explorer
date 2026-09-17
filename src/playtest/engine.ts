@@ -1,7 +1,7 @@
 ﻿import { deck, type Card } from '../math/deck';
 
 export const BOARD_SIZE = 10;
-export const RULES_VERSION = 7;
+export const RULES_VERSION = 9;
 export const BLOCKED = ['2,2','4,1','3,5','5,4','0,4','2,7','4,8','6,0','6,3','6,6','8,1','8,8'];
 export const INITIAL_COVER: Record<string,number> = Object.fromEntries(BLOCKED.map((tile,i)=>[tile,i%2===0?1:2]));
 export const DEFAULT_ENEMIES = 8;
@@ -28,7 +28,8 @@ export interface GameState {
 export type Command =
   | { type: 'move'; actor: string; x: number; y: number }
   | { type: 'basic' | 'ability'; actor: string; target: string | Point; cards?: string[]; ability?: AbilityId; destination?: Point }
-  | { type: 'guard'; actor: string }
+  | { type: 'endTurn'; actor: string }
+  | { type: 'exert'; actor: string; cards: string[]; x: number; y: number }
   | { type: 'recover'; actor: string; cards: string[] }
   | { type: 'endRound'; allowSkip?: boolean };
 interface Effect { damage: number }
@@ -45,6 +46,11 @@ export const ABILITIES: Record<AbilityId, Ability> = {
   pinningShot: { name: 'Pinning Shot', total: 25, range: 6, accuracyDown: true, slow: true, description: '3 / 4 / 5 cards: 6 / 8 / 10 damage. On hit, apply both accuracy and movement debuffs through the next enemy phase.', tiers: {3:{damage:6},4:{damage:8},5:{damage:10}} },
 
 };
+// Six-card payments crit for twice the strongest ordinary (five-card) tier.
+for(const ability of Object.values(ABILITIES)) {
+  ability.tiers[6]={damage:ability.tiers[5]!.damage*2};
+  ability.description+=` 6 cards: critical hit for ${ability.tiers[6].damage} damage (double the five-card tier).`;
+}
 const key = (p: Point) => `${p.x},${p.y}`;
 export const distance = (a: Point,b: Point) => Math.abs(a.x-b.x)+Math.abs(a.y-b.y);
 const alive = (u: Unit) => u.hp > 0;
@@ -64,8 +70,9 @@ function shuffled(cards: Card[], s: GameState) {
 function log(s: GameState,event: Omit<GameEvent,'sequence'|'round'>) {
   s.events.push({sequence:s.events.length+1,round:s.round,...event});
 }
-function draw(s: GameState,unit: Unit) {
-  while(unit.hand.length<6) {
+function draw(s: GameState,unit: Unit,count = 6-unit.hand.length) {
+  const size=unit.hand.length+count;
+  while(unit.hand.length<size) {
     if(!s.drawPile.length) {
       if(!s.discard.length) break;
       s.drawPile=shuffled(s.discard,s);s.discard=[];
@@ -127,12 +134,12 @@ export function paymentOptions(unit: Unit, ability = unit.abilities[0]): Card[][
   const out:Card[][]=[],target=ABILITIES[ability].total;
   for(let mask=1;mask<1<<unit.hand.length;mask++){
     const cards=unit.hand.filter((_,i)=>mask&(1<<i));
-    if(cards.length>=2&&cards.length<=5&&cards.reduce((n,c)=>n+c.value,0)===target)out.push(cards);
+    if(cards.length>=2&&cards.length<=6&&cards.reduce((n,c)=>n+c.value,0)===target)out.push(cards);
   }
   return out.sort((a,b)=>a.length-b.length||a.map(c=>c.id).join().localeCompare(b.map(c=>c.id).join()));
 }
 export function paymentSummary(unit: Unit, ability = unit.abilities[0]) {
-  const counts:Record<number,number>={2:0,3:0,4:0,5:0};
+  const counts:Record<number,number>={2:0,3:0,4:0,5:0,6:0};
   paymentOptions(unit,ability).forEach(cards=>counts[cards.length]++);return counts;
 }
 export const abilityHitChance = (count: number) => Math.min(1, Math.max(0, (50 + count * 10) / 100));
@@ -164,12 +171,25 @@ export function effectText(ability: AbilityId,count: number): string {
   const effect=ABILITIES[ability].tiers[count];
   if(!effect)return 'Select a valid payment.';
   const definition=ABILITIES[ability];
-  return [`${Math.round(abilityHitChance(count)*100)}% base hit chance before cover`,`${effect.damage} damage${definition.radius?' per enemy':''}`,definition.radius&&`radius ${definition.radius} around target; no friendly fire`,definition.dash&&`move up to ${definition.dash} tiles before the hit`,definition.pierce&&'ignores shields',definition.accuracyDown&&'-30 accuracy points on hit',definition.slow&&'-1 movement on hit'].filter(Boolean).join(' · ');
+  return [count===6&&'CRIT: double five-card damage',`${Math.round(abilityHitChance(count)*100)}% base hit chance before cover`,`${effect.damage} damage${definition.radius?' per enemy':''}`,definition.radius&&`radius ${definition.radius} around target; no friendly fire`,definition.dash&&`move up to ${definition.dash} tiles before the hit`,definition.pierce&&'ignores shields',definition.accuracyDown&&'-30 accuracy points on hit',definition.slow&&'-1 movement on hit'].filter(Boolean).join(' · ');
 }
 export function validPayment(unit: Unit,ids: readonly string[],ability = unit.abilities[0]): boolean {
   if(!unit.abilities.includes(ability)||!ABILITIES[ability].tiers[ids.length]||new Set(ids).size!==ids.length)return false;
   const cards=ids.map(id=>unit.hand.find(c=>c.id===id));
   return cards.every(Boolean)&&cards.reduce((n,c)=>n+c!.value,0)===ABILITIES[ability].total;
+}
+export function validBasicPayment(unit: Unit,ids: readonly string[]): boolean {
+  return ids.length===2&&new Set(ids).size===2&&ids.every(id=>unit.hand.some(c=>c.id===id));
+}
+export function validPair(unit: Unit,ids: readonly string[]): boolean {
+  return validBasicPayment(unit,ids)&&unit.hand.find(c=>c.id===ids[0])!.rank===unit.hand.find(c=>c.id===ids[1])!.rank;
+}
+export function redrawPattern(cards: readonly Card[]): 'suited'|'run'|null {
+  if(cards.length<2)return null;
+  if(cards.every(c=>c.suit===cards[0].suit))return 'suited';
+  const ranks=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+  const sorted=cards.map(c=>ranks.indexOf(c.rank)).sort((a,b)=>a-b);
+  return cards.length>=3&&sorted.every((rank,i)=>rank>=0&&(i===0||rank===sorted[i-1]+1))?'run':null;
 }
 export function abilityPositions(s: GameState,unit: Unit,abilityId: AbilityId): Reachable[] {
   if(!unit.abilities.includes(abilityId))return [];
@@ -179,7 +199,7 @@ export function legalTargets(s: GameState,unit: Unit,mode:'basic'|'ability',card
   if(mode==='ability'&&!unit.abilities.includes(abilityId))return [];
   const ability=ABILITIES[abilityId];
   if(mode==='ability'&&(!ability.tiers[cardCount]||!abilityPositions(s,unit,abilityId).some(p=>p.x===origin.x&&p.y===origin.y)))return [];
-  const range=mode==='basic'?2:ability?.range??0;
+  const range=mode==='basic'?5:ability?.range??0;
   return s.units.filter(t=>alive(t)&&t.side==='enemy'&&distance(origin,t)<=range&&combatSight(s,origin,t));
 }
 export function areaTargets(s: GameState,unit: Unit,abilityId: AbilityId): Point[] {
@@ -268,9 +288,19 @@ export function perform(s: GameState,command: Command): GameState {
   const abilityId=(command.type==='ability'?command.ability:undefined)??unit.abilities[0];
   const offeredPayments=paymentSummary(unit,abilityId),handBefore=unit.hand.map(c=>c.id);
   const offeredAbilities=Object.fromEntries(unit.abilities.map(id=>[id,paymentSummary(unit,id)]));
-  if(command.type==='guard') {
-    unit.shield=Math.max(unit.shield,3);unit.acted=true;
-    log(next,{type:'guard',actor:unit.id,offeredPayments,message:`${unit.name} guards: 3 shield until next round.`,details:{handBefore,offeredAbilities}});return next;
+  if(command.type==='endTurn') {
+    unit.acted=true;
+    log(next,{type:'endTurn',actor:unit.id,message:`${unit.name} ends their turn.`});return next;
+  }
+  if(command.type==='exert') {
+    assert(unit.moved,'Use normal movement before Exert.');
+    assert(validPair(unit,command.cards),'Exert requires two distinct cards of the same rank.');
+    const destination=reachable(next,unit,2).find(p=>p.x===command.x&&p.y===command.y&&p.cost>0);
+    assert(destination,'Choose a reachable tile within 2 steps.');
+    const paid=unit.hand.filter(c=>command.cards.includes(c.id));
+    unit.hand=unit.hand.filter(c=>!command.cards.includes(c.id));next.discard.push(...paid);
+    const from={x:unit.x,y:unit.y};unit.x=destination.x;unit.y=destination.y;
+    log(next,{type:'exert',actor:unit.id,cardIds:command.cards,cardValues:paid.map(c=>c.value),message:`${unit.name} exerts and moves ${destination.cost} steps.`,details:{from,to:{x:unit.x,y:unit.y}}});return next;
   }
   if(command.type==='recover') {
     assert(unit.abilitiesUsed===0,'Exchange before using an ability.');
@@ -281,7 +311,8 @@ export function perform(s: GameState,command: Command): GameState {
     log(next,{type:'recover',actor:unit.id,cardIds:discarded.map(c=>c.id),cardValues:discarded.map(c=>c.value),offeredPayments,message:`${unit.name} exchanges ${discarded.length} cards. Free exchange used; action still available.`,details:{handBefore,handAfter:unit.hand.map(c=>c.id),offeredAbilities}});return next;
   }
   const ids=command.cards??[];
-  if(command.type==='ability')assert(validPayment(unit,ids,abilityId),'Choose one of this character’s abilities and 2–5 cards totaling its value.');
+  if(command.type==='ability')assert(validPayment(unit,ids,abilityId),'Choose one of this character’s abilities and 2–6 cards totaling its value.');
+  if(command.type==='basic')assert(validBasicPayment(unit,ids),'Basic requires exactly two distinct cards from the selected hand.');
   const origin=command.destination??{x:unit.x,y:unit.y};
   if(command.destination)assert(command.type==='ability'&&abilityPositions(next,unit,abilityId).some(p=>p.x===origin.x&&p.y===origin.y),'Choose a reachable attack position; walls and units block the path.');
   const isArea=command.type==='ability'&&!!ABILITIES[abilityId].radius;
@@ -292,6 +323,10 @@ export function perform(s: GameState,command: Command): GameState {
   assert(center,'Choose a target.');
   const from={x:unit.x,y:unit.y};
   const hits:{target:string;damage:number;hpAfter:number;hit:boolean;roll:number;hitChance:number;accuracyDown:boolean;slow:boolean}[]=[];
+  const paid=unit.hand.filter(c=>ids.includes(c.id));
+  unit.hand=unit.hand.filter(c=>!ids.includes(c.id));next.discard.push(...paid);
+  const critical=command.type==='ability'&&ids.length===6;
+  const redraw=command.type==='ability'&&redrawPattern(paid)?paid.length:0;
   let amount=0;
   if(command.type==='basic'){
     const chance=hitChance(unit,target!,1,next.cover),roll=random(next),hit=roll<chance;
@@ -301,7 +336,6 @@ export function perform(s: GameState,command: Command): GameState {
     hits.push({target:target!.id,damage:amount,hpAfter:target!.hp,hit,roll,hitChance:chance,accuracyDown:target!.accuracyDown,slow:target!.slow});
   }
   else {
-    const paid=unit.hand.filter(c=>ids.includes(c.id));unit.hand=unit.hand.filter(c=>!ids.includes(c.id));next.discard.push(...paid);
     unit.x=origin.x;unit.y=origin.y;
     const effect=ABILITIES[abilityId].tiers[ids.length]!;
     // Snapshot victims before damage so defeating the center never changes its blast.
@@ -314,11 +348,11 @@ export function perform(s: GameState,command: Command): GameState {
       hits.push({target:victim.id,damage:dealt,hpAfter:victim.hp,hit,roll,hitChance:chance,accuracyDown:victim.accuracyDown,slow:victim.slow});
     }
   }
-  if(command.type==='ability')unit.abilitiesUsed++;
-  unit.acted=command.type==='basic'||unit.abilitiesUsed>=2;
-  log(next,{type:command.type,actor:unit.id,target:target?.id,cardIds:command.type==='ability'?ids:[],cardValues:command.type==='ability'?ids.map(id=>deck.find(c=>c.id===id)!.value):[],offeredPayments,
-    message:command.type==='basic'?`${unit.name} uses Basic on ${target!.name}: ${hits[0].hit?`${amount} damage`:'missed'} (${Math.round(hits[0].hitChance*100)}% hit).`:`${unit.name} uses ${ABILITIES[abilityId].name} (${ids.length} cards)${isArea?` at ${String.fromCharCode(65+center.x)}${center.y+1}`:''}${distance(from,unit)?` and moves to ${String.fromCharCode(65+unit.x)}${unit.y+1}`:''}: ${hits.map(h=>`${h.target} ${h.hit?`takes ${h.damage}`:'missed'} (${Math.round(h.hitChance*100)}% hit)${h.accuracyDown?' / accuracy reduced':''}${h.slow?' / slowed':''}`).join(', ')||'no enemies hit'}.`,
-    details:{abilitiesUsed:unit.abilitiesUsed,hitChance:command.type==='ability'?abilityHitChance(ids.length):1,handBefore,handAfter:unit.hand.map(c=>c.id),offeredAbilities,ability:command.type==='ability'?abilityId:null,paymentCount:command.type==='ability'?ids.length:0,total:command.type==='ability'?ABILITIES[abilityId].total:0,amount,hits,from,targetPoint:{x:center.x,y:center.y},targetHpAfter:target?.hp,targetShieldAfter:target?.shield,actorShieldAfter:unit.shield,position:{x:unit.x,y:unit.y}}});
+  unit.abilitiesUsed++;
+  if(redraw)draw(next,unit,redraw);
+  log(next,{type:command.type,actor:unit.id,target:target?.id,cardIds:ids,cardValues:ids.map(id=>paid.find(c=>c.id===id)!.value),offeredPayments,
+    message:command.type==='basic'?`${unit.name} uses Basic on ${target!.name}: ${hits[0].hit?`${amount} damage`:'missed'} (${Math.round(hits[0].hitChance*100)}% hit).`:`${unit.name} uses ${ABILITIES[abilityId].name} (${ids.length} cards)${critical?' CRIT':''}${isArea?` at ${String.fromCharCode(65+center.x)}${center.y+1}`:''}${distance(from,unit)?` and moves to ${String.fromCharCode(65+unit.x)}${unit.y+1}`:''}: ${hits.map(h=>`${h.target} ${h.hit?`takes ${h.damage}`:'missed'} (${Math.round(h.hitChance*100)}% hit)${h.accuracyDown?' / accuracy reduced':''}${h.slow?' / slowed':''}`).join(', ')||'no enemies hit'}.${redraw?` Draw ${redraw} cards (${redrawPattern(paid)}).`:''}`,
+    details:{critical,damageMultiplier:critical?2:1,redraw,redrawPattern:redraw?redrawPattern(paid):null,abilitiesUsed:unit.abilitiesUsed,hitChance:command.type==='ability'?abilityHitChance(ids.length):1,handBefore,handAfter:unit.hand.map(c=>c.id),offeredAbilities,ability:command.type==='ability'?abilityId:null,paymentCount:ids.length,total:command.type==='ability'?ABILITIES[abilityId].total:0,amount,hits,from,targetPoint:{x:center.x,y:center.y},targetHpAfter:target?.hp,targetShieldAfter:target?.shield,actorShieldAfter:unit.shield,position:{x:unit.x,y:unit.y}}});
   checkOutcome(next);return next;
 }
 export function allPhysicalCards(s: GameState) {return [...s.drawPile,...s.discard,...s.units.flatMap(u=>u.hand)];}

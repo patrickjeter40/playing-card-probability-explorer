@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { deck } from '../math/deck';
-import { ABILITIES, BLOCKED, BOARD_SIZE, MAX_ENEMIES, abilityHitChance, combatSight, coverAgainst, hasCover, hitChance, movementSpeed, abilityPositions, affectedEnemies, allPhysicalCards, createGame, enemyPlan, hasSight, legalTargets, paymentOptions, perform, reachable, validPayment, type AbilityId, type GameState, type Unit } from './engine';
+import { ABILITIES, BLOCKED, BOARD_SIZE, MAX_ENEMIES, abilityHitChance, combatSight, coverAgainst, hasCover, hitChance, movementSpeed, abilityPositions, affectedEnemies, allPhysicalCards, createGame, enemyPlan, hasSight, legalTargets, paymentOptions, paymentSummary, effectText, perform, reachable, validPayment, validPair, redrawPattern, type AbilityId, type GameState, type Unit } from './engine';
 const unit=(s:GameState,id:string)=>s.units.find(u=>u.id===id)!;
 function conserved(s:GameState){const cards=allPhysicalCards(s);expect(cards).toHaveLength(52);expect(new Set(cards.map(c=>c.id)).size).toBe(52);expect([...cards.map(c=>c.id)].sort()).toEqual(deck.map(c=>c.id).sort());}
 function fixture(values:number[],actor='A'){
   const s=createGame(42);s.rng=7;const pool=[...deck];s.units.forEach(u=>u.hand=[]);s.discard=[];
   s.units.filter(u=>u.side==='party').forEach((u,i)=>{u.x=0;u.y=i*3;});
-  unit(s,actor).hand=values.map(value=>{const i=pool.findIndex(c=>c.value===value);if(i<0)throw Error('Invalid test hand');return pool.splice(i,1)[0];});s.drawPile=pool;
+  unit(s,actor).hand=values.map((value,index)=>{let i=pool.findIndex(c=>c.value===value&&c.suit===['clubs','diamonds','hearts','spades'][index%4]);if(i<0)i=pool.findIndex(c=>c.value===value);if(i<0)throw Error('Invalid test hand');return pool.splice(i,1)[0];});s.drawPile=pool;
   unit(s,actor).x=1;unit(s,actor).y=3;unit(s,'E1').x=2;unit(s,'E1').y=3;
   return s;
 }
@@ -23,7 +23,7 @@ describe('tactical playtest rules',()=>{
     expect(()=>perform(s,{type:'move',actor:'A',x:6,y:6})).toThrow();
     const moved=perform(s,{type:'move',actor:'A',x:2,y:1});expect(unit(moved,'A').acted).toBe(false);
     expect(()=>perform(moved,{type:'move',actor:'A',x:2,y:0})).toThrow();
-    const acted=perform(moved,{type:'guard',actor:'A'});expect(()=>perform(acted,{type:'move',actor:'A',x:2,y:0})).toThrow();
+    const acted=perform(moved,{type:'endTurn',actor:'A'});expect(()=>perform(acted,{type:'move',actor:'A',x:2,y:0})).toThrow();
     expect(unit(s,'A').x).toBe(1);conserved(acted);
   });
   it('counts equal-valued physical choices and rejects reuse or foreign cards',()=>{
@@ -34,17 +34,22 @@ describe('tactical playtest rules',()=>{
   });
   it.each([[2,[5,10],3],[3,[1,4,10],4],[4,[1,2,3,9],6],[5,[1,2,3,4,5],8]] as const)('pays %i distinct cards for the corresponding Impact effect',(count,values,damage)=>{
     const s=fixture([...values]);const selected=ids(unit(s,'A'));const next=perform(s,{type:'ability',actor:'A',target:'E1',cards:selected});
-    expect(unit(next,'E1').hp).toBe(10-damage);expect(unit(next,'A').hand).toHaveLength(0);expect(next.discard.map(c=>c.id)).toEqual(selected);
+    expect(unit(next,'E1').hp).toBe(10-damage);expect(unit(next,'A').hand).toHaveLength(redrawPattern(unit(s,'A').hand)?count:0);expect(next.discard.map(c=>c.id)).toEqual(selected);
     expect(next.events.at(-1)?.details?.paymentCount).toBe(count);expect(unit(next,'A').abilitiesUsed).toBe(1);expect(unit(next,'A').acted).toBe(false);conserved(next);
   });
-  it('basic attacks cost no cards but spend the activation and respect range',()=>{
-    const s=fixture([5,10]);const hand=ids(unit(s,'A'));const next=perform(s,{type:'basic',actor:'A',target:'E1'});
-    expect(unit(next,'E1').hp).toBe(8);expect(ids(unit(next,'A'))).toEqual(hand);expect(()=>perform(next,{type:'basic',actor:'A',target:'E1'})).toThrow();
-    expect(()=>perform(createGame(),{type:'basic',actor:'A',target:'E3'})).toThrow();conserved(next);
+  it('Basic spends any two cards, has range five, and allows further actions',()=>{
+    const s=fixture([5,10,2,3]);s.cover={};unit(s,'E1').x=6;
+    const paid=ids(unit(s,'A')).slice(0,2);
+    const next=perform(s,{type:'basic',actor:'A',target:'E1',cards:paid});
+    expect(unit(next,'E1').hp).toBe(8);expect(unit(next,'A').hand).toHaveLength(2);expect(unit(next,'A').acted).toBe(false);
+    expect(next.events.at(-1)?.cardIds).toEqual(paid);conserved(next);
+    expect(()=>perform(s,{type:'basic',actor:'A',target:'E1'})).toThrow();
+    expect(()=>perform(s,{type:'basic',actor:'A',target:'E1',cards:[paid[0],paid[0]]})).toThrow();
+    unit(s,'E1').x=7;expect(()=>perform(s,{type:'basic',actor:'A',target:'E1',cards:paid})).toThrow();
   });
-  it('Guard absorbs damage and unused shield expires next round',()=>{
-    let s=fixture([5,10]);s.units.filter(u=>u.side==='enemy'&&u.id!=='E1').forEach(u=>u.hp=0);s=perform(s,{type:'guard',actor:'A'});
-    const hp=unit(s,'A').hp;const next=perform(s,{type:'endRound',allowSkip:true});expect(unit(next,'A').hp).toBe(hp-1);expect(unit(next,'A').shield).toBe(0);expect(next.round).toBe(2);
+  it('End turn ends the activation without granting Guard shield',()=>{
+    const s=perform(fixture([5,10]),{type:'endTurn',actor:'A'});
+    expect(unit(s,'A').acted).toBe(true);expect(unit(s,'A').shield).toBe(0);
   });
   it('retains unspent cards and refills, preserving all physical cards',()=>{
     const s=fixture([1,4,5,10]);const actor=unit(s,'A'),paid=actor.hand.filter(c=>c.value===5||c.value===10).map(c=>c.id),kept=actor.hand.filter(c=>!paid.includes(c.id)).map(c=>c.id);
@@ -185,7 +190,7 @@ describe('tactical playtest rules',()=>{
     expect(unit(s,'A').hand).toHaveLength(6);expect(unit(s,'A').acted).toBe(false);expect(unit(s,'A').moved).toBe(false);
     expect(s.discard.map(c=>c.id)).toEqual(selected);expect(s.drawPile).toHaveLength(28);expect(createGame(7)).toEqual(before);
     expect(()=>perform(s,{type:'recover',actor:'A',cards:ids(unit(s,'A'))})).toThrow(/already exchanged/);
-    s=perform(s,{type:'move',actor:'A',x:2,y:1});s=perform(s,{type:'guard',actor:'A'});
+    s=perform(s,{type:'move',actor:'A',x:2,y:1});s=perform(s,{type:'endTurn',actor:'A'});
     expect(()=>perform(s,{type:'recover',actor:'A',cards:ids(unit(s,'A'))})).toThrow(/already acted/);
     s=perform(s,{type:'recover',actor:'B',cards:ids(unit(s,'B')).slice(0,1)});
     expect(unit(s,'B').acted).toBe(false);expect(unit(s,'C').exchanged).toBe(false);
@@ -200,7 +205,7 @@ describe('tactical playtest rules',()=>{
   });
   it('wins when the final enemy is defeated and prevents further actions',()=>{
     const s=fixture([5,10]);unit(s,'E1').hp=2;s.units.filter(u=>u.side==='enemy'&&u.id!=='E1').forEach(u=>u.hp=0);
-    const won=perform(s,{type:'basic',actor:'A',target:'E1'});expect(won.status).toBe('won');expect(()=>perform(won,{type:'guard',actor:'B'})).toThrow();conserved(won);
+    const won=perform(s,{type:'basic',actor:'A',target:'E1',cards:ids(unit(s,'A'))});expect(won.status).toBe('won');expect(()=>perform(won,{type:'endTurn',actor:'B'})).toThrow();conserved(won);
   });
   it('loses when all characters fall and discards defeated characters’ hands',()=>{
     const s=createGame();s.rng=7;for(const id of ['A','B','C'])unit(s,id).hp=1;
@@ -209,14 +214,14 @@ describe('tactical playtest rules',()=>{
   });
 });
 
-describe('two ability turns and seeded accuracy',()=>{
-  it('allows the same ability twice, spends separate cards, blocks a third and resets next round',()=>{
+describe('unlimited ability turns and seeded accuracy',()=>{
+  it('allows three abilities with separate payments and resets next round',()=>{
     let s=fixture([5,10,5,10,5,10]);
-    for(let i=0;i<2;i++){
+    for(let i=0;i<3;i++){
       s=perform(s,{type:'ability',actor:'A',target:'E1',cards:ids(unit(s,'A')).slice(0,2)});
       expect(unit(s,'A').abilitiesUsed).toBe(i+1);conserved(s);
     }
-    expect(unit(s,'A').acted).toBe(true);
+    expect(unit(s,'A').acted).toBe(false);
     expect(()=>perform(s,{type:'ability',actor:'A',target:'E1',cards:ids(unit(s,'A'))})).toThrow();
     s=perform(s,{type:'endRound',allowSkip:true});
     expect(unit(s,'A')).toMatchObject({abilitiesUsed:0,acted:false});
@@ -247,11 +252,10 @@ describe('two ability turns and seeded accuracy',()=>{
     const s=fixture([5,10,1,10,10]);
     const once=perform(s,{type:'ability',actor:'A',target:'E1',cards:ids(unit(s,'A')).slice(0,2)});
     const twice=perform(once,{type:'ability',actor:'A',ability:'piercingStrike',target:'E1',cards:ids(unit(once,'A'))});
-    expect(unit(twice,'A').acted).toBe(true);conserved(twice);
-    for(const type of ['guard','basic'] as const){
-      const done=perform(once,{type,actor:'A',target:'E1'});
-      expect(unit(done,'A').acted).toBe(true);
-    }
+    expect(unit(twice,'A').acted).toBe(false);conserved(twice);
+    const basic=perform(once,{type:'basic',actor:'A',target:'E1',cards:ids(unit(once,'A')).slice(0,2)});
+    expect(unit(basic,'A').acted).toBe(false);
+    expect(unit(perform(basic,{type:'endTurn',actor:'A'}),'A').acted).toBe(true);
   });
 });
 
@@ -374,5 +378,87 @@ describe('destructible directional cover and firearm ranges',()=>{
     s.rng=2;unit(s,'E1').x=3;unit(s,'E1').y=0;unit(s,'E1').accuracyDown=true;
     const flank=perform(s,{type:'endRound',allowSkip:true});
     expect(flank.cover['2,3']).toBe(2);
+  });
+});
+
+
+describe('payment redraws and Exert',()=>{
+  const physical=(...ids:string[])=>ids.map(id=>deck.find(c=>c.id===id)!);
+  function handFixture(cardIds:string[]){
+    const s=fixture([]);unit(s,'A').hand=physical(...cardIds);
+    s.drawPile=deck.filter(c=>!cardIds.includes(c.id));s.cover={};return s;
+  }
+  it('recognizes suited cards and rank runs of at least three, with ace low and no wrap',()=>{
+    expect(redrawPattern(physical('clubs-5','clubs-10'))).toBe('suited');
+    expect(redrawPattern(physical('clubs-7','hearts-8'))).toBeNull();
+    expect(redrawPattern(physical('clubs-6','hearts-4','diamonds-5'))).toBe('run');
+    expect(redrawPattern(physical('clubs-A','hearts-2','diamonds-3'))).toBe('run');
+    expect(redrawPattern(physical('clubs-J','hearts-Q','diamonds-K'))).toBe('run');
+    expect(redrawPattern(physical('clubs-Q','hearts-K','diamonds-A'))).toBeNull();
+    expect(redrawPattern(physical('clubs-10','hearts-J','diamonds-Q','spades-10'))).toBeNull();
+  });
+  it.each([['clubs-5','clubs-10'],['clubs-4','hearts-5','diamonds-6'],['clubs-4','clubs-5','clubs-6']])('redraws exactly the spent count once even on a miss: %j',(...payment)=>{
+    const s=handFixture([...payment,'spades-2']);s.rng=2;unit(s,'A').accuracyDown=true;
+    const next=perform(s,{type:'ability',actor:'A',target:'E1',cards:payment});
+    expect(unit(next,'A').hand).toHaveLength(payment.length+1);
+    expect(ids(unit(next,'A'))).toContain('spades-2');
+    expect(unit(next,'E1').hp).toBe(10);
+    expect(next.events.at(-1)?.details?.redraw).toBe(payment.length);conserved(next);
+    expect(next).toEqual(perform(s,{type:'ability',actor:'A',target:'E1',cards:payment}));
+  });
+  it('reshuffles exhausted draws for redraws and gives Basic no suited bonus',()=>{
+    const s=handFixture(['clubs-5','clubs-10']);s.discard=s.drawPile;s.drawPile=[];
+    const next=perform(s,{type:'ability',actor:'A',target:'E1',cards:ids(unit(s,'A'))});
+    expect(unit(next,'A').hand).toHaveLength(2);expect(next.events.some(e=>e.type==='reshuffle')).toBe(true);conserved(next);
+    const basic=perform(s,{type:'basic',actor:'A',target:'E1',cards:ids(unit(s,'A'))});
+    expect(unit(basic,'A').hand).toHaveLength(0);conserved(basic);
+  });
+  it('Exert requires normal movement, spends a rank pair and repeats after attacking',()=>{
+    let s=handFixture(['clubs-5','diamonds-5','clubs-J','diamonds-J','clubs-2','hearts-3']);
+    const pair=['clubs-5','diamonds-5'];
+    expect(()=>perform(s,{type:'exert',actor:'A',cards:pair,x:1,y:4})).toThrow(/movement/);
+    s=perform(s,{type:'move',actor:'A',x:1,y:4});
+    s=perform(s,{type:'basic',actor:'A',target:'E1',cards:['clubs-2','hearts-3']});
+    expect(()=>perform(s,{type:'exert',actor:'A',cards:pair,x:1,y:7})).toThrow();
+    expect(()=>perform(s,{type:'exert',actor:'A',cards:pair,x:2,y:3})).toThrow();
+    s.cover['1,5']=1;expect(()=>perform(s,{type:'exert',actor:'A',cards:pair,x:1,y:5})).toThrow();s.cover={};
+    s=perform(s,{type:'exert',actor:'A',cards:pair,x:1,y:6});
+    s=perform(s,{type:'exert',actor:'A',cards:['clubs-J','diamonds-J'],x:1,y:8});
+    expect(unit(s,'A')).toMatchObject({x:1,y:8,moved:true,acted:false});expect(unit(s,'A').hand).toHaveLength(0);conserved(s);
+    const actor=unit(handFixture(['clubs-J','diamonds-Q']),'A');
+    expect(validPair(actor,ids(actor))).toBe(false);expect(validPair(actor,['clubs-J','clubs-J'])).toBe(false);
+  });
+});
+
+
+describe('six-card critical payments',()=>{
+  const values:Record<number,number[]>={13:[1,1,2,2,3,4],14:[1,1,2,2,3,5],15:[1,1,2,2,4,5],21:[1,2,3,4,5,6],22:[1,2,3,4,5,7],24:[1,2,3,4,6,8],25:[1,2,3,4,5,10],31:[1,2,3,5,10,10]};
+  it.each(Object.keys(ABILITIES) as AbilityId[])('%s accepts six cards and doubles five-card damage before shields',ability=>{
+    const actorId=createGame().units.find(u=>u.abilities.includes(ability))!.id;
+    const s=fixture(values[ABILITIES[ability].total],actorId);s.cover={};
+    const actor=unit(s,actorId),cards=ids(actor),enemy=unit(s,'E1');enemy.hp=100;enemy.maxHp=100;enemy.shield=3;
+    expect(validPayment(actor,cards,ability)).toBe(true);
+    expect(paymentOptions(actor,ability).map(p=>p.map(c=>c.id))).toContainEqual(cards);
+    expect(paymentSummary(actor,ability)[6]).toBe(1);
+    expect(effectText(ability,6)).toContain('CRIT');expect(abilityHitChance(6)).toBe(1);
+    const next=perform(s,{type:'ability',actor:actorId,ability,target:'E1',cards});
+    const expected=ABILITIES[ability].tiers[5]!.damage*2-(ABILITIES[ability].pierce?0:3);
+    expect(unit(next,'E1').hp).toBe(100-expected);
+    expect(next.events.at(-1)?.details).toMatchObject({critical:true,damageMultiplier:2,paymentCount:6});
+    expect(unit(next,actorId).acted).toBe(false);conserved(next);
+    expect(validPayment(actor,[...cards.slice(0,5),cards[0]],ability)).toBe(false);
+    expect(validPayment(actor,[...cards.slice(0,5),'foreign'],ability)).toBe(false);
+  });
+  it('six-card runs redraw all six cards and can still miss under accuracy penalties',()=>{
+    const s=fixture([1,2,3,4,5,6]);s.cover={};s.rng=2;unit(s,'A').accuracyDown=true;
+    const next=perform(s,{type:'ability',actor:'A',ability:'piercingStrike',target:'E1',cards:ids(unit(s,'A'))});
+    expect(unit(next,'E1').hp).toBe(10);expect(unit(next,'A').hand).toHaveLength(6);
+    expect(next.events.at(-1)?.details).toMatchObject({critical:true,redraw:6,hits:[{hit:false,damage:0}]});conserved(next);
+  });
+  it('six-card area crit applies doubled damage independently to every victim',()=>{
+    const s=fixture(values[13],'B');s.cover={};Object.assign(unit(s,'E2'),{x:2,y:4,hp:100,maxHp:100});unit(s,'E1').hp=100;
+    const next=perform(s,{type:'ability',actor:'B',ability:'burst',target:'E1',cards:ids(unit(s,'B'))});
+    expect(unit(next,'E1').hp).toBe(90);expect(unit(next,'E2').hp).toBe(90);conserved(next);
+    expect(validPayment(unit(fixture(values[15],'B'),'B'),ids(unit(fixture(values[15],'B'),'B')),'burst')).toBe(false);
   });
 });

@@ -72,19 +72,19 @@
   check(JSON.stringify(await exported())===JSON.stringify(afterImpact),'repeating undone attack preserves random result');
 
   check(document.querySelector('.pt-unit.selected b').textContent==='Unit A','first ability keeps actor selected');
-  check(document.querySelector('.pt-actions .badge').textContent==='1 abilities left','one ability remains');
+  check(document.querySelector('.pt-actions .badge').textContent==='1 attacks played','attack count displayed without a limit');
   check(!document.querySelector('.pt-abilities button').disabled,'second ability available');
   check(document.querySelector('.pt-fallbacks button:last-child').disabled,'exchange blocked after ability');
-  await button('Guard');
-  check(document.querySelector('.pt-unit.selected b').textContent==='Unit B','guard finishes turn');
-  await button('Guard');
+  await button('End turn');
+  check(document.querySelector('.pt-unit.selected b').textContent==='Unit B','End turn finishes turn');
+  await button('End turn');
   check(document.querySelector('.pt-unit.selected b').textContent==='Unit C','next character selected');
   check(document.querySelector('.pt-modes button:first-child').textContent.includes('3'),'ranged character movement');
   for(let i=1;i<=6;i++)await click(`.pt-card:nth-child(${i})`);
   await button('Exchange 6 selected cards');
   check(document.querySelectorAll('.pt-card').length===6,'exchange refills hand');
   check(document.querySelector('.pt-unit.selected b').textContent==='Unit C','exchange retains character');
-  await button('Guard');
+  await button('End turn');
   const beforePhase=await exported();
   await button('Resolve enemy phase');
   const afterPhase=await exported();
@@ -95,7 +95,7 @@
 
   check(document.querySelector('.pt-toolbar>strong').textContent==='Round 2','round advances');
   check(document.querySelectorAll('.pt-card').length===6,'round refills hand');
-  check(document.querySelector('.pt-actions .badge').textContent==='2 abilities left','ability budget resets');
+  check(document.querySelector('.pt-actions .badge').textContent==='0 attacks played','attack count resets');
   let captured;
   const original=HTMLAnchorElement.prototype.click;
   HTMLAnchorElement.prototype.click=function(){captured={url:this.href,name:this.download};};
@@ -105,7 +105,7 @@
   check(all.length===52&&new Set(all.map(c=>c.id)).size===52,'downloaded session preserves all 52 physical cards');
   check(session.events.filter(e=>e.type==='ability').length===1,'session contains paid-ability records');
   check(session.events.some(e=>e.type==='recover'),'session includes exchange decision');
-  check(session.version===7&&session.enemyCount===8&&session.events.filter(e=>e.type==='ability').every(e=>e.details.ability&&Object.keys(e.details.offeredAbilities).length===3),'export includes version, enemy count and abilities');
+  check(session.version===9&&session.enemyCount===8&&session.events.filter(e=>e.type==='ability').every(e=>e.details.ability&&Object.keys(e.details.offeredAbilities).length===3),'export includes version, enemy count and abilities');
   await button('End round early');
   check(!!document.querySelector('.pt-confirm'),'early end asks about unused actions');
   await button('Keep playing');
@@ -144,5 +144,27 @@
   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(health,'10');
   health.dispatchEvent(new Event('input',{bubbles:true}));await pause();
   await button('Restart with enemy health');
+  check(![...document.querySelectorAll('button')].some(b=>b.textContent.startsWith('Guard')),'Guard removed');
+  check(document.querySelector('.pt-modes button:last-child').disabled,'Exert disabled before movement');
+  await click('.pt-tile[aria-label^="D2 "]');
+  await button('Basic');
+  await click('.pt-card:nth-child(1)');await click('.pt-card:nth-child(2)');
+  check(document.querySelector('.pt-modes button:nth-child(2)').getAttribute('aria-pressed')==='true','card selection preserves Basic mode');
+  check(!!document.querySelector('.pt-payment.valid'),'Basic accepts any two cards');
+  await button('Enemy 4',document.querySelector('.pt-targets'));await button('Confirm Basic');
+  check(document.querySelector('.pt-unit.selected b').textContent==='Unit A','Basic keeps character active');
+  check(document.querySelectorAll('.pt-card').length===4,'Basic spends exactly two cards');
+  await button('Exert');
+  const pair=[...document.querySelectorAll('.pt-card')].filter(b=>b.getAttribute('aria-label').startsWith('9 of'));
+  for(const card of pair){card.click();await pause();}
+  check(pair.length===2&&!!document.querySelector('.pt-payment.valid'),'same-rank pair pays Exert after Basic');
+  check(document.querySelectorAll('.pt-tile.reachable').length>0,'Exert highlights reachable tiles');
+  const beforeExert=await exported();await click('.pt-tile.reachable');
+  const afterExert=await exported();
+  check(afterExert.events.at(-1).type==='exert'&&afterExert.units[0].hand.length===2,'Exert moves and spends pair');
+  check(!document.querySelector('.pt-modes button:last-child').disabled,'Exert remains available for another pair');
+  await button('Undo last action');
+  check(JSON.stringify(await exported())===JSON.stringify(beforeExert),'undo restores Exert position and cards');
+  await button('Restart seed');
   return {messages,sessionFile:captured.name,roundTwo:{draw:session.drawPile.length,discard:session.discard.length,held:session.units.reduce((n,u)=>n+u.hand.length,0)}};
 }

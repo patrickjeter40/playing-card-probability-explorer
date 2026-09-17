@@ -16,7 +16,7 @@ for(const seed of [20260915,20260916,20260917,1,2,3,4,5,6,7]){
       for(const point of actor.moved||actor.abilitiesUsed>0?[{x:actor.x,y:actor.y,cost:0}]:reachable(s,actor)){
         const positioned={...s,units:s.units.map(u=>u.id===id?{...u,x:point.x,y:point.y}:u)};
         const moved=positioned.units.find(u=>u.id===id)!;
-        for(const mode of ['basic','ability'] as const)for(const {cards,ability} of mode==='basic'?[{cards:[],ability:actor.abilities[0]}]:options)for(const origin of mode==='basic'?[{...point,cost:0}]:abilityPositions(positioned,moved,ability))for(const target of legalTargets(positioned,moved,mode,cards.length,ability,origin)){
+        for(const mode of ['basic','ability'] as const)for(const {cards,ability} of mode==='basic'?(actor.hand.length>=2?[{cards:actor.hand.slice(0,2),ability:actor.abilities[0]}]:[]):options)for(const origin of mode==='basic'?[{...point,cost:0}]:abilityPositions(positioned,moved,ability))for(const target of legalTargets(positioned,moved,mode,cards.length,ability,origin)){
           const effect=mode==='basic'?{damage:2}:ABILITIES[ability].tiers[cards.length]!;
           const victims=mode==='basic'?[target]:affectedEnemies(positioned,target,ability);
           const score=victims.reduce((n,victim)=>{const hit=Math.max(0,effect.damage-(mode==='ability'&&ABILITIES[ability].pierce?0:victim.shield));return n+Math.min(victim.hp,hit)+(victim.hp<=hit?6:0);},0)-cards.length*.12-point.cost*.02-origin.cost*.01;
@@ -28,7 +28,7 @@ for(const seed of [20260915,20260916,20260917,1,2,3,4,5,6,7]){
         const enemies=s.units.filter(u=>u.side==='enemy'&&u.hp>0);
         const tiles=reachable(s,actor).sort((a,b)=>Math.min(...enemies.map(e=>distance(a,e)))-Math.min(...enemies.map(e=>distance(b,e)))||a.cost-b.cost);
         if(!actor.moved&&actor.abilitiesUsed===0&&tiles[0]?.cost)s=perform(s,{type:'move',actor:id,x:tiles[0].x,y:tiles[0].y});
-        s=perform(s,{type:'guard',actor:id});
+        s=perform(s,{type:'endTurn',actor:id});
       }
       check(s);
     }
