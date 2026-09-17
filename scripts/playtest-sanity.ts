@@ -1,18 +1,19 @@
-﻿import { allPhysicalCards, createGame, ABILITIES, BLOCKED, abilityPositions, affectedEnemies, legalTargets, paymentOptions, perform, reachable, readyUnits, distance, type Command, type GameState } from '../src/playtest/engine';
-function check(s:GameState){const cards=allPhysicalCards(s);if(cards.length!==52||new Set(cards.map(c=>c.id)).size!==52)throw Error('Card conservation failed');const living=s.units.filter(u=>u.hp>0);if(new Set(living.map(u=>`${u.x},${u.y}`)).size!==living.length)throw Error('Unit collision');if(living.some(u=>BLOCKED.includes(`${u.x},${u.y}`)))throw Error('Unit inside wall');}
+﻿import { allPhysicalCards, createGame, ABILITIES, abilityPositions, affectedEnemies, legalTargets, paymentOptions, perform, reachable, readyUnits, distance, type Command, type GameState } from '../src/playtest/engine';
+function check(s:GameState){const cards=allPhysicalCards(s);if(cards.length!==52||new Set(cards.map(c=>c.id)).size!==52)throw Error('Card conservation failed');const living=s.units.filter(u=>u.hp>0);if(new Set(living.map(u=>`${u.x},${u.y}`)).size!==living.length)throw Error('Unit collision');if(living.some(u=>(s.cover[`${u.x},${u.y}`]??0)>0))throw Error('Unit inside wall');}
 const outcomes=[];
 for(const seed of [20260915,20260916,20260917,1,2,3,4,5,6,7]){
   let s=createGame(seed);check(s);
   while(s.status==='playing'&&s.round<=20){
-    for(const id of readyUnits(s).map(u=>u.id)){
+    while(readyUnits(s).length&&s.status==='playing'){
+      const id=readyUnits(s)[0].id;
       if(s.status!=='playing')break;
       let actor=s.units.find(u=>u.id===id)!;
-      if(!actor.abilities.some(ability=>paymentOptions(actor,ability).length)){
+      if(!actor.exchanged&&actor.abilitiesUsed===0&&!actor.abilities.some(ability=>paymentOptions(actor,ability).length)){
         s=perform(s,{type:'recover',actor:id,cards:actor.hand.map(c=>c.id)});check(s);actor=s.units.find(u=>u.id===id)!;
       }
       let best:{score:number;point:{x:number;y:number};command:Command}|null=null;
       const options=actor.abilities.flatMap(ability=>paymentOptions(actor,ability).map(cards=>({ability,cards})));
-      for(const point of reachable(s,actor)){
+      for(const point of actor.moved||actor.abilitiesUsed>0?[{x:actor.x,y:actor.y,cost:0}]:reachable(s,actor)){
         const positioned={...s,units:s.units.map(u=>u.id===id?{...u,x:point.x,y:point.y}:u)};
         const moved=positioned.units.find(u=>u.id===id)!;
         for(const mode of ['basic','ability'] as const)for(const {cards,ability} of mode==='basic'?[{cards:[],ability:actor.abilities[0]}]:options)for(const origin of mode==='basic'?[{...point,cost:0}]:abilityPositions(positioned,moved,ability))for(const target of legalTargets(positioned,moved,mode,cards.length,ability,origin)){
@@ -26,7 +27,7 @@ for(const seed of [20260915,20260916,20260917,1,2,3,4,5,6,7]){
       else {
         const enemies=s.units.filter(u=>u.side==='enemy'&&u.hp>0);
         const tiles=reachable(s,actor).sort((a,b)=>Math.min(...enemies.map(e=>distance(a,e)))-Math.min(...enemies.map(e=>distance(b,e)))||a.cost-b.cost);
-        if(tiles[0]?.cost)s=perform(s,{type:'move',actor:id,x:tiles[0].x,y:tiles[0].y});
+        if(!actor.moved&&actor.abilitiesUsed===0&&tiles[0]?.cost)s=perform(s,{type:'move',actor:id,x:tiles[0].x,y:tiles[0].y});
         s=perform(s,{type:'guard',actor:id});
       }
       check(s);
