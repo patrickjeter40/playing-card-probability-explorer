@@ -32,9 +32,9 @@ describe('tactical playtest rules',()=>{
     expect(validPayment(actor,['not-a-card',actor.hand[2].id])).toBe(false);
     const before=structuredClone(s);expect(()=>perform(s,{type:'ability',actor:'A',target:'E1',cards:[actor.hand[0].id]})).toThrow();expect(s).toEqual(before);
   });
-  it.each([[2,[5,10],3],[3,[1,4,10],4],[4,[1,2,3,9],6],[5,[1,2,3,4,5],8]] as const)('pays %i distinct cards for the corresponding Impact effect',(count,values,damage)=>{
-    const s=fixture([...values]);const selected=ids(unit(s,'A'));const next=perform(s,{type:'ability',actor:'A',target:'E1',cards:selected});
-    expect(unit(next,'E1').hp).toBe(10-damage);expect(unit(next,'A').hand).toHaveLength(redrawPattern(unit(s,'A').hand)?count:0);expect(next.discard.map(c=>c.id)).toEqual(selected);
+  it.each([[2,[5,10],5],[3,[1,4,10],6],[4,[1,2,3,9],9],[5,[1,2,3,4,5],12]] as const)('pays %i distinct cards for the corresponding Impact effect',(count,values,damage)=>{
+    const s=fixture([...values]);unit(s,'E1').hp=20;const selected=ids(unit(s,'A'));const next=perform(s,{type:'ability',actor:'A',target:'E1',cards:selected});
+    expect(unit(next,'E1').hp).toBe(20-damage);expect(unit(next,'A').hand).toHaveLength(redrawPattern(unit(s,'A').hand)?count:0);expect(next.discard.map(c=>c.id)).toEqual(selected);
     expect(next.events.at(-1)?.details?.paymentCount).toBe(count);expect(unit(next,'A').abilitiesUsed).toBe(1);expect(unit(next,'A').acted).toBe(false);conserved(next);
   });
   it('Basic spends any two cards, has range five, and allows further actions',()=>{
@@ -110,14 +110,14 @@ describe('tactical playtest rules',()=>{
     enemy.x=6;expect(legalTargets(s,actor,'ability',2,'impact').some(u=>u.id==='E1')).toBe(false);
   });
   it.each([
-    ['A','piercingStrike',[1,10,10],5],['A','piercingStrike',[1,2,8,10],7],['A','piercingStrike',[1,2,3,5,10],9],
-    ['A','finisher',[4,10,10],6],['A','finisher',[1,3,10,10],8],['A','finisher',[1,2,3,8,10],11],
+    ['A','piercingStrike',[1,10,10],8],['A','piercingStrike',[1,2,8,10],11],['A','piercingStrike',[1,2,3,5,10],14],
+    ['A','finisher',[4,10,10],9],['A','finisher',[1,3,10,10],12],['A','finisher',[1,2,3,8,10],17],
     ['B','burst',[3,10],2],['B','burst',[1,2,10],3],['B','burst',[1,2,3,7],4],['B','burst',[1,1,2,4,5],5],
     ['B','shockwave',[2,10,10],3],['B','shockwave',[1,3,8,10],4],['B','shockwave',[1,2,3,6,10],6],
     ['B','firestorm',[1,10,10,10],6],['B','firestorm',[1,2,8,10,10],8],
-    ['C','disruptingShot',[4,10],3],['C','disruptingShot',[1,3,10],4],['C','disruptingShot',[1,2,3,8],5],['C','disruptingShot',[1,2,3,4,4],7],
-    ['C','hamstringShot',[2,10,10],4],['C','hamstringShot',[1,3,8,10],6],['C','hamstringShot',[1,2,3,6,10],8],
-    ['C','pinningShot',[5,10,10],6],['C','pinningShot',[1,4,10,10],8],['C','pinningShot',[1,2,3,9,10],10],
+    ['C','disruptingShot',[4,10],4],['C','disruptingShot',[1,3,10],5],['C','disruptingShot',[1,2,3,8],6],['C','disruptingShot',[1,2,3,4,4],9],
+    ['C','hamstringShot',[2,10,10],5],['C','hamstringShot',[1,3,8,10],8],['C','hamstringShot',[1,2,3,6,10],10],
+    ['C','pinningShot',[5,10,10],8],['C','pinningShot',[1,4,10,10],10],['C','pinningShot',[1,2,3,9,10],13],
   ] as [string,AbilityId,number[],number][])('resolves %s %s offensive tiers',(id,ability,values,hit)=>{
     const s=fixture(values,id),actor=unit(s,id);unit(s,'E1').hp=20;
     expect(validPayment(actor,ids(actor),ability)).toBe(true);
@@ -136,7 +136,7 @@ describe('tactical playtest rules',()=>{
   it('single-target attacks spare adjacent enemies and Piercing Strike bypasses shields',()=>{
     const s=fixture([1,10,10]);Object.assign(unit(s,'E2'),{x:2,y:4});unit(s,'E1').shield=3;
     const next=perform(s,{type:'ability',actor:'A',ability:'piercingStrike',target:'E1',cards:ids(unit(s,'A'))});
-    expect(unit(next,'E1').hp).toBe(5);expect(unit(next,'E1').shield).toBe(3);expect(unit(next,'E2').hp).toBe(10);conserved(next);
+    expect(unit(next,'E1').hp).toBe(2);expect(unit(next,'E1').shield).toBe(3);expect(unit(next,'E2').hp).toBe(10);conserved(next);
   });
   it('area damage rolls for every eligible enemy once, respects walls and spares allies',()=>{
     const s=fixture([1,2,8,10,10],'B');Object.assign(unit(s,'B'),{x:1,y:5});
@@ -165,7 +165,7 @@ describe('tactical playtest rules',()=>{
     expect(legalTargets(s,actor,'ability',2,'disruptingShot').some(u=>u.id==='E1')).toBe(true);
     const next=perform(s,{type:'ability',actor:'C',ability:'disruptingShot',target:'E1',cards:ids(actor)});
     expect(unit(next,'C')).toMatchObject({x:1,y:3,abilitiesUsed:1});
-    expect(unit(next,'E1')).toMatchObject({hp:7,accuracyDown:true});
+    expect(unit(next,'E1')).toMatchObject({hp:6,accuracyDown:true});
   });
   it('rejects mobile destinations in walls, occupied tiles, or beyond path budget without spending cards',()=>{
     const s=fixture([4,10],'C'),actor=unit(s,'C'),before=structuredClone(s);
@@ -216,7 +216,7 @@ describe('tactical playtest rules',()=>{
 
 describe('unlimited ability turns and seeded accuracy',()=>{
   it('allows three abilities with separate payments and resets next round',()=>{
-    let s=fixture([5,10,5,10,5,10]);
+    let s=fixture([5,10,5,10,5,10]);unit(s,'E1').hp=20;
     for(let i=0;i<3;i++){
       s=perform(s,{type:'ability',actor:'A',target:'E1',cards:ids(unit(s,'A')).slice(0,2)});
       expect(unit(s,'A').abilitiesUsed).toBe(i+1);conserved(s);

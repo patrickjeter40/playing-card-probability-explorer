@@ -1,7 +1,7 @@
 ﻿import { deck, type Card } from '../math/deck';
 
 export const BOARD_SIZE = 10;
-export const RULES_VERSION = 9;
+export const RULES_VERSION = 10;
 export const BLOCKED = ['2,2','4,1','3,5','5,4','0,4','2,7','4,8','6,0','6,3','6,6','8,1','8,8'];
 export const INITIAL_COVER: Record<string,number> = Object.fromEntries(BLOCKED.map((tile,i)=>[tile,i%2===0?1:2]));
 export const DEFAULT_ENEMIES = 8;
@@ -35,15 +35,15 @@ export type Command =
 interface Effect { damage: number }
 interface Ability { name: string; total: number; range: number; accuracyDown?: boolean; slow?: boolean; radius?: number; dash?: number; pierce?: boolean; description: string; tiers: Partial<Record<number, Effect>> }
 export const ABILITIES: Record<AbilityId, Ability> = {
-  impact: { name: 'Impact', total: 15, range: 4, description: '2 / 3 / 4 / 5 cards: deal 3 / 4 / 6 / 8 damage to one enemy.', tiers: {2:{damage:3},3:{damage:4},4:{damage:6},5:{damage:8}} },
-  piercingStrike: { name: 'Piercing Strike', total: 21, range: 5, pierce: true, description: '3 / 4 / 5 cards: deal 5 / 7 / 9 damage to one enemy, ignoring shields.', tiers: {3:{damage:5},4:{damage:7},5:{damage:9}} },
-  finisher: { name: 'Finisher', total: 24, range: 3, description: '3 / 4 / 5 cards: deal 6 / 8 / 11 damage to one enemy.', tiers: {3:{damage:6},4:{damage:8},5:{damage:11}} },
+  impact: { name: 'Impact', total: 15, range: 4, description: '2 / 3 / 4 / 5 cards: deal 5 / 6 / 9 / 12 damage to one enemy.', tiers: {2:{damage:5},3:{damage:6},4:{damage:9},5:{damage:12}} },
+  piercingStrike: { name: 'Piercing Strike', total: 21, range: 5, pierce: true, description: '3 / 4 / 5 cards: deal 8 / 11 / 14 damage to one enemy, ignoring shields.', tiers: {3:{damage:8},4:{damage:11},5:{damage:14}} },
+  finisher: { name: 'Finisher', total: 24, range: 3, description: '3 / 4 / 5 cards: deal 9 / 12 / 17 damage to one enemy.', tiers: {3:{damage:9},4:{damage:12},5:{damage:17}} },
   burst: { name: 'Burst', total: 13, range: 4, radius: 1, description: '2 / 3 / 4 / 5 cards: deal 2 / 3 / 4 / 5 damage to the target and enemies within 1 tile of it.', tiers: {2:{damage:2},3:{damage:3},4:{damage:4},5:{damage:5}} },
   shockwave: { name: 'Shockwave', total: 22, range: 4, radius: 2, description: '3 / 4 / 5 cards: deal 3 / 4 / 6 damage to the target and enemies within 2 tiles of it.', tiers: {3:{damage:3},4:{damage:4},5:{damage:6}} },
   firestorm: { name: 'Firestorm', total: 31, range: 5, radius: 2, description: '4 / 5 cards: deal 6 / 8 damage to the target and enemies within 2 tiles of it.', tiers: {4:{damage:6},5:{damage:8}} },
-  disruptingShot: { name: 'Disrupting Shot', total: 14, range: 6, accuracyDown: true, description: '2 / 3 / 4 / 5 cards: 3 / 4 / 5 / 7 damage. On hit, reduce accuracy by 30 percentage points through the next enemy phase.', tiers: {2:{damage:3},3:{damage:4},4:{damage:5},5:{damage:7}} },
-  hamstringShot: { name: 'Hamstring Shot', total: 22, range: 6, slow: true, description: '3 / 4 / 5 cards: 4 / 6 / 8 damage. On hit, reduce movement by 1 through the next enemy phase.', tiers: {3:{damage:4},4:{damage:6},5:{damage:8}} },
-  pinningShot: { name: 'Pinning Shot', total: 25, range: 6, accuracyDown: true, slow: true, description: '3 / 4 / 5 cards: 6 / 8 / 10 damage. On hit, apply both accuracy and movement debuffs through the next enemy phase.', tiers: {3:{damage:6},4:{damage:8},5:{damage:10}} },
+  disruptingShot: { name: 'Disrupting Shot', total: 14, range: 6, accuracyDown: true, description: '2 / 3 / 4 / 5 cards: 4 / 5 / 6 / 9 damage. On hit, reduce accuracy by 30 percentage points through the next enemy phase.', tiers: {2:{damage:4},3:{damage:5},4:{damage:6},5:{damage:9}} },
+  hamstringShot: { name: 'Hamstring Shot', total: 22, range: 6, slow: true, description: '3 / 4 / 5 cards: 5 / 8 / 10 damage. On hit, reduce movement by 1 through the next enemy phase.', tiers: {3:{damage:5},4:{damage:8},5:{damage:10}} },
+  pinningShot: { name: 'Pinning Shot', total: 25, range: 6, accuracyDown: true, slow: true, description: '3 / 4 / 5 cards: 8 / 10 / 13 damage. On hit, apply both accuracy and movement debuffs through the next enemy phase.', tiers: {3:{damage:8},4:{damage:10},5:{damage:13}} },
 
 };
 // Six-card payments crit for twice the strongest ordinary (five-card) tier.

@@ -14,15 +14,15 @@ Each character has three unique abilities, at character-specific totals: A 15 / 
 
 | Character | Ability | Total | Range | 2 cards | 3 cards | 4 cards | 5 cards | 6 cards (crit) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| A: Single target, 12 HP | Impact | 15 | 4 | 3 damage | 4 damage | 6 damage | 8 damage | 16 damage |
-| A | Piercing Strike | 21 | 5 | Impossible | 5 damage | 7 damage | 9 damage | 18 damage |
-| A | Finisher | 24 | 3 | Impossible | 6 damage | 8 damage | 11 damage | 22 damage |
+| A: Single target, 12 HP | Impact | 15 | 4 | 5 damage | 6 damage | 9 damage | 12 damage | 24 damage |
+| A | Piercing Strike | 21 | 5 | Impossible | 8 damage | 11 damage | 14 damage | 28 damage |
+| A | Finisher | 24 | 3 | Impossible | 9 damage | 12 damage | 17 damage | 34 damage |
 | B: Area damage, 10 HP | Burst | 13 | 4 | 2 damage | 3 damage | 4 damage | 5 damage | 10 damage |
 | B | Shockwave | 22 | 4 | Impossible | 3 damage | 4 damage | 6 damage | 12 damage |
 | B | Firestorm | 31 | 5 | Impossible | Impossible | 6 damage | 8 damage | 16 damage |
-| C: Ranged debuffs, 10 HP | Disrupting Shot | 14 | 6 | 3 damage | 4 damage | 5 damage | 7 damage | 14 damage |
-| C | Hamstring Shot | 22 | 6 | Impossible | 4 damage | 6 damage | 8 damage | 16 damage |
-| C | Pinning Shot | 25 | 6 | Impossible | 6 damage | 8 damage | 10 damage | 20 damage |
+| C: Ranged debuffs, 10 HP | Disrupting Shot | 14 | 6 | 4 damage | 5 damage | 6 damage | 9 damage | 18 damage |
+| C | Hamstring Shot | 22 | 6 | Impossible | 5 damage | 8 damage | 10 damage | 20 damage |
+| C | Pinning Shot | 25 | 6 | Impossible | 8 damage | 10 damage | 13 damage | 26 damage |
 
 Ability accuracy is 70% / 80% / 90% / 100% for 2 / 3 / 4 / 5 cards; six cards also have 100% base accuracy. Each affected enemy gets an independent seeded roll. Misses still spend cards and one ability use; mobile movement still resolves. Basic and enemy attacks start at 100% accuracy; cover and accuracy debuffs reduce that chance. The minimum hit chance is 5%. Suited payments and runs of at least three ranks immediately draw cards equal to the payment size, even on a miss. The UI previews hit chance, and exports record chances, rolls, and hit/miss results.
 
